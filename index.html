@@ -189,76 +189,21 @@
   </p>
 </div>
 
+
+
+<h2>How This Was Built</h2>
 <div class="card">
-  <h3>Content Pipeline</h3>
   <p>
-    The editorial pipeline currently looks like
-    <span id="sankey-content" class="inline-sankey"></span>
-    with a bottleneck at the review stage holding up 40% of drafts.
+    Someone saw <a href="https://www.linkedin.com/in/elijah-meeks/" target="_blank">Elijah Meeks</a> post about building a "sparksankey" in 15 minutes with AI and thought: <em>"wait, can we actually do that?"</em>
   </p>
-</div>
-
-<h2>Comparison: Sankey vs. Number vs. Sparkline</h2>
-<p>The same data — three ways to show it inline. Notice how the sankey communicates <em>flow and proportion</em> that a single number or sparkline cannot.</p>
-
-<div class="comparison">
-  <div class="card">
-    <div class="label">Just a Number</div>
-    <div class="value">62%</div>
-    <p style="font-size:0.8rem; color:var(--muted); margin-top:0.5rem;">Conversion rate</p>
-  </div>
-  <div class="card">
-    <div class="label">Sparkline</div>
-    <div class="sparkline-container"><svg id="sparkline-compare" width="120" height="32"></svg></div>
-    <p style="font-size:0.8rem; color:var(--muted); margin-top:0.5rem;">Trend over time</p>
-  </div>
-  <div class="card">
-    <div class="label">Inline Sankey</div>
-    <div class="sparkline-container"><span id="sankey-compare" class="inline-sankey"></span></div>
-    <p style="font-size:0.8rem; color:var(--muted); margin-top:0.5rem;">Flow &amp; distribution</p>
-  </div>
-</div>
-
-<h2>Interactive Sandbox</h2>
-<p>Tweak the parameters to see how inline sankeys behave at different scales and styles.</p>
-
-<div class="sandbox-controls">
-  <div class="control-group">
-    <label>Width <span class="range-value" id="val-width">140px</span></label>
-    <input type="range" id="ctrl-width" min="60" max="300" value="140">
-  </div>
-  <div class="control-group">
-    <label>Height <span class="range-value" id="val-height">20px</span></label>
-    <input type="range" id="ctrl-height" min="10" max="48" value="20">
-  </div>
-  <div class="control-group">
-    <label>Node Width <span class="range-value" id="val-nodewidth">4px</span></label>
-    <input type="range" id="ctrl-nodewidth" min="1" max="12" value="4">
-  </div>
-  <div class="control-group">
-    <label>Node Padding <span class="range-value" id="val-padding">3px</span></label>
-    <input type="range" id="ctrl-padding" min="1" max="10" value="3">
-  </div>
-  <div class="control-group">
-    <label>Link Opacity <span class="range-value" id="val-opacity">0.35</span></label>
-    <input type="range" id="ctrl-opacity" min="10" max="80" value="35">
-  </div>
-  <div class="control-group">
-    <label>Color Palette</label>
-    <div class="palette-picker" id="palette-picker"></div>
-  </div>
-</div>
-
-<div class="sandbox-preview">
-  Revenue flowed as <span id="sankey-sandbox" class="inline-sankey"></span> last quarter, a healthy distribution.
-</div>
-
-<h2>Technical Notes</h2>
-<div class="card">
   <p>
-    Each inline sankey is a <code>&lt;svg&gt;</code> with <code>display: inline-block; vertical-align: middle</code>.
-    Layout is computed by <code>d3-sankey</code>. No labels at this scale — hover for detail.
-    The entire page is a single HTML file with D3 loaded from CDN. Zero build steps.
+    Turns out, yes. Claude researched Meeks' <a href="https://github.com/nteract/semiotic" target="_blank">Semiotic</a> framework (which had a dedicated <code>SparkNetworkFrame</code>), dug through the <a href="https://github.com/d3/d3-sankey" target="_blank">d3-sankey</a> docs, and then built this entire page — from concept to working prototype — in a single conversation. The whole thing is one self-contained HTML file. No build tools, no frameworks, no npm install. Just vibes and CDN links.
+  </p>
+  <p>
+    Each inline sankey is a tiny <code>&lt;svg&gt;</code> with <code>display: inline-block</code>, laid out by <code>d3-sankey</code>, and sized to match your text's line-height. Hover any node or link for details. That's it. That's the whole trick.
+  </p>
+  <p style="margin-bottom:0;">
+    <a href="https://gist.github.com/dustin-thomas-sh/e6141c1a884a8d089b81b897d0099744" target="_blank">View the source code on GitHub Gist</a>
   </p>
 </div>
 
@@ -432,36 +377,6 @@ const DATA = {
       { source: "feature", target: "resolved", value: 50 },
     ],
   },
-  content: {
-    nodes: [
-      { id: "draft", name: "Drafts" },
-      { id: "review", name: "In Review" },
-      { id: "approved", name: "Approved" },
-      { id: "published", name: "Published" },
-      { id: "revision", name: "Needs Revision" },
-    ],
-    links: [
-      { source: "draft", target: "review", value: 45 },
-      { source: "review", target: "approved", value: 27 },
-      { source: "review", target: "revision", value: 18 },
-      { source: "approved", target: "published", value: 25 },
-      { source: "revision", target: "review", value: 12 },
-    ],
-  },
-  compare: {
-    nodes: [
-      { id: "new", name: "New Users" },
-      { id: "return", name: "Returning" },
-      { id: "convert", name: "Converted" },
-      { id: "bounce", name: "Bounced" },
-    ],
-    links: [
-      { source: "new", target: "convert", value: 380 },
-      { source: "new", target: "bounce", value: 620 },
-      { source: "return", target: "convert", value: 710 },
-      { source: "return", target: "bounce", value: 290 },
-    ],
-  },
 };
 
 // ─── Render All Static Sankeys ──────────────────────────────
@@ -469,77 +384,9 @@ function renderAll() {
   renderInlineSankey("sankey-revenue", DATA.revenue, { width: 150, height: 20 });
   renderInlineSankey("sankey-funnel", DATA.funnel, { width: 160, height: 22 });
   renderInlineSankey("sankey-tickets", DATA.tickets, { width: 150, height: 20 });
-  renderInlineSankey("sankey-content", DATA.content, { width: 140, height: 20 });
-  renderInlineSankey("sankey-compare", DATA.compare, { width: 120, height: 28 });
 }
 renderAll();
 
-// ─── Sparkline for Comparison ───────────────────────────────
-(function drawSparkline() {
-  const data = [42, 48, 55, 53, 62, 58, 65, 71, 68, 74, 78, 62];
-  const svg = d3.select("#sparkline-compare");
-  const w = 120, h = 32, pad = 4;
-  const x = d3.scaleLinear().domain([0, data.length - 1]).range([pad, w - pad]);
-  const y = d3.scaleLinear().domain([d3.min(data) - 5, d3.max(data) + 5]).range([h - pad, pad]);
-  const line = d3.line().x((_, i) => x(i)).y(d => y(d)).curve(d3.curveCatmullRom);
-  svg.append("path").attr("d", line(data)).attr("fill", "none").attr("stroke", "#0ea5e9").attr("stroke-width", 1.5);
-  svg.append("circle").attr("cx", x(data.length - 1)).attr("cy", y(data[data.length - 1])).attr("r", 2.5).attr("fill", "#0ea5e9");
-})();
-
-// ─── Sandbox Controls ───────────────────────────────────────
-const controls = {
-  width: document.getElementById("ctrl-width"),
-  height: document.getElementById("ctrl-height"),
-  nodewidth: document.getElementById("ctrl-nodewidth"),
-  padding: document.getElementById("ctrl-padding"),
-  opacity: document.getElementById("ctrl-opacity"),
-};
-
-function updateSandbox() {
-  const w = +controls.width.value;
-  const h = +controls.height.value;
-  const nw = +controls.nodewidth.value;
-  const np = +controls.padding.value;
-  const op = +controls.opacity.value / 100;
-
-  document.getElementById("val-width").textContent = w + "px";
-  document.getElementById("val-height").textContent = h + "px";
-  document.getElementById("val-nodewidth").textContent = nw + "px";
-  document.getElementById("val-padding").textContent = np + "px";
-  document.getElementById("val-opacity").textContent = op.toFixed(2);
-
-  renderInlineSankey("sankey-sandbox", DATA.revenue, {
-    width: w, height: h, nodeWidth: nw, nodePadding: np, linkOpacity: op,
-    palette: PALETTES[activePalette],
-  });
-}
-
-Object.values(controls).forEach(c => c.addEventListener("input", updateSandbox));
-
-// Palette picker
-const pickerEl = document.getElementById("palette-picker");
-Object.entries(PALETTES).forEach(([name, colors]) => {
-  const opt = document.createElement("div");
-  opt.className = "palette-option" + (name === activePalette ? " active" : "");
-  opt.title = name;
-  colors.slice(0, 3).forEach(c => {
-    const swatch = document.createElement("div");
-    swatch.className = "palette-swatch";
-    swatch.style.background = c;
-    opt.appendChild(swatch);
-  });
-  opt.addEventListener("click", () => {
-    activePalette = name;
-    document.querySelectorAll(".palette-option").forEach(el => el.classList.remove("active"));
-    opt.classList.add("active");
-    renderAll();
-    updateSandbox();
-  });
-  pickerEl.appendChild(opt);
-});
-
-// Initial sandbox render
-updateSandbox();
 </script>
 
 </body>
