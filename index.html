@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inline Sankey — Proof of Concept</title>
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<script src="https://unpkg.com/d3-array@3"></script>
+<script src="https://unpkg.com/d3-shape@3"></script>
+<script src="https://unpkg.com/d3-sankey@0.12"></script>
+<style>
+  :root {
+    --text: #1a1a2e;
+    --muted: #64748b;
+    --bg: #fafafa;
+    --card: #ffffff;
+    --border: #e2e8f0;
+    --accent: #3b82f6;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: var(--text);
+    background: var(--bg);
+    line-height: 1.7;
+    padding: 2rem;
+    max-width: 820px;
+    margin: 0 auto;
+  }
+  h1 { font-size: 1.75rem; font-weight: 700; margin-bottom: 0.25rem; }
+  h2 { font-size: 1.25rem; font-weight: 600; margin: 2.5rem 0 0.75rem; color: var(--text); border-bottom: 2px solid var(--border); padding-bottom: 0.5rem; }
+  h3 { font-size: 1rem; font-weight: 600; margin: 1.5rem 0 0.5rem; }
+  .subtitle { color: var(--muted); font-size: 0.95rem; margin-bottom: 2rem; }
+  p { margin-bottom: 1rem; font-size: 0.95rem; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1rem;
+  }
+  .card p:last-child { margin-bottom: 0; }
+  .inline-sankey {
+    display: inline-block;
+    vertical-align: middle;
+    margin: 0 4px;
+    cursor: default;
+    position: relative;
+  }
+  .inline-sankey:hover { filter: brightness(0.95); }
+
+  /* Tooltip */
+  .sankey-tooltip {
+    position: fixed;
+    pointer-events: none;
+    background: rgba(15, 23, 42, 0.92);
+    color: #fff;
+    font-size: 0.75rem;
+    padding: 6px 10px;
+    border-radius: 6px;
+    line-height: 1.4;
+    max-width: 220px;
+    z-index: 1000;
+    opacity: 0;
+    transition: opacity 0.15s;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  }
+  .sankey-tooltip.visible { opacity: 1; }
+
+  /* Comparison table */
+  .comparison {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 1rem;
+    margin: 1rem 0;
+  }
+  .comparison .card { text-align: center; }
+  .comparison .card .label { font-size: 0.8rem; color: var(--muted); margin-bottom: 0.5rem; }
+  .comparison .card .value { font-size: 1.5rem; font-weight: 700; }
+  .comparison .card .sparkline-container { display: flex; justify-content: center; margin-top: 0.25rem; }
+
+  /* Sandbox */
+  .sandbox-controls {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+  }
+  .control-group label {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--muted);
+    margin-bottom: 0.25rem;
+  }
+  .control-group input[type="range"] { width: 100%; }
+  .control-group .range-value {
+    font-size: 0.75rem;
+    color: var(--muted);
+    text-align: right;
+  }
+  .sandbox-preview {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    font-size: 1.1rem;
+    line-height: 1.8;
+    text-align: center;
+  }
+  .sandbox-preview .inline-sankey { margin: 0 6px; }
+
+  .palette-picker {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+  .palette-option {
+    display: flex;
+    gap: 2px;
+    padding: 4px 8px;
+    border: 2px solid var(--border);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  .palette-option.active { border-color: var(--accent); }
+  .palette-option:hover { border-color: var(--accent); }
+  .palette-swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+  }
+  code {
+    background: #f1f5f9;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.85rem;
+  }
+  .tag {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 99px;
+    background: #dbeafe;
+    color: #1d4ed8;
+    vertical-align: middle;
+    margin-left: 4px;
+  }
+</style>
+</head>
+<body>
+
+<h1>Inline Sankey Diagrams</h1>
+<p class="subtitle">Word-sized flow visualizations embedded directly in text — proof of concept</p>
+
+<h2>What Is This?</h2>
+<p>
+  Edward Tufte coined the term <strong>sparkline</strong> for "small, intense, word-sized graphics." An <strong>inline sankey</strong> (or "sparksankey") applies that idea to flow data — showing how quantities split and merge across stages, right inside a sentence, without breaking reading flow.
+</p>
+
+<h2>Inline Examples</h2>
+
+<div class="card">
+  <h3>Revenue Flow</h3>
+  <p>
+    Last quarter, revenue split across three channels
+    <span id="sankey-revenue" class="inline-sankey"></span>
+    with direct sales dominating but partnerships growing 18% QoQ.
+  </p>
+</div>
+
+<div class="card">
+  <h3>User Funnel</h3>
+  <p>
+    Of 10,000 visitors, the conversion funnel
+    <span id="sankey-funnel" class="inline-sankey"></span>
+    shows most drop-off at signup, with strong retention post-activation.
+  </p>
+</div>
+
+<div class="card">
+  <h3>Support Tickets</h3>
+  <p>
+    This week's 847 support tickets flowed as
+    <span id="sankey-tickets" class="inline-sankey"></span>
+    — billing issues escalate at 3× the rate of product bugs.
+  </p>
+</div>
+
+<div class="card">
+  <h3>Content Pipeline</h3>
+  <p>
+    The editorial pipeline currently looks like
+    <span id="sankey-content" class="inline-sankey"></span>
+    with a bottleneck at the review stage holding up 40% of drafts.
+  </p>
+</div>
+
+<h2>Comparison: Sankey vs. Number vs. Sparkline</h2>
+<p>The same data — three ways to show it inline. Notice how the sankey communicates <em>flow and proportion</em> that a single number or sparkline cannot.</p>
+
+<div class="comparison">
+  <div class="card">
+    <div class="label">Just a Number</div>
+    <div class="value">62%</div>
+    <p style="font-size:0.8rem; color:var(--muted); margin-top:0.5rem;">Conversion rate</p>
+  </div>
+  <div class="card">
+    <div class="label">Sparkline</div>
+    <div class="sparkline-container"><svg id="sparkline-compare" width="120" height="32"></svg></div>
+    <p style="font-size:0.8rem; color:var(--muted); margin-top:0.5rem;">Trend over time</p>
+  </div>
+  <div class="card">
+    <div class="label">Inline Sankey</div>
+    <div class="sparkline-container"><span id="sankey-compare" class="inline-sankey"></span></div>
+    <p style="font-size:0.8rem; color:var(--muted); margin-top:0.5rem;">Flow &amp; distribution</p>
+  </div>
+</div>
+
+<h2>Interactive Sandbox</h2>
+<p>Tweak the parameters to see how inline sankeys behave at different scales and styles.</p>
+
+<div class="sandbox-controls">
+  <div class="control-group">
+    <label>Width <span class="range-value" id="val-width">140px</span></label>
+    <input type="range" id="ctrl-width" min="60" max="300" value="140">
+  </div>
+  <div class="control-group">
+    <label>Height <span class="range-value" id="val-height">20px</span></label>
+    <input type="range" id="ctrl-height" min="10" max="48" value="20">
+  </div>
+  <div class="control-group">
+    <label>Node Width <span class="range-value" id="val-nodewidth">4px</span></label>
+    <input type="range" id="ctrl-nodewidth" min="1" max="12" value="4">
+  </div>
+  <div class="control-group">
+    <label>Node Padding <span class="range-value" id="val-padding">3px</span></label>
+    <input type="range" id="ctrl-padding" min="1" max="10" value="3">
+  </div>
+  <div class="control-group">
+    <label>Link Opacity <span class="range-value" id="val-opacity">0.35</span></label>
+    <input type="range" id="ctrl-opacity" min="10" max="80" value="35">
+  </div>
+  <div class="control-group">
+    <label>Color Palette</label>
+    <div class="palette-picker" id="palette-picker"></div>
+  </div>
+</div>
+
+<div class="sandbox-preview">
+  Revenue flowed as <span id="sankey-sandbox" class="inline-sankey"></span> last quarter, a healthy distribution.
+</div>
+
+<h2>Technical Notes</h2>
+<div class="card">
+  <p>
+    Each inline sankey is a <code>&lt;svg&gt;</code> with <code>display: inline-block; vertical-align: middle</code>.
+    Layout is computed by <code>d3-sankey</code>. No labels at this scale — hover for detail.
+    The entire page is a single HTML file with D3 loaded from CDN. Zero build steps.
+  </p>
+</div>
+
+<!-- Tooltip element -->
+<div class="sankey-tooltip" id="tooltip"></div>
+
+<script>
+// ─── Color Palettes ─────────────────────────────────────────
+const PALETTES = {
+  ocean:   ["#0ea5e9", "#06b6d4", "#14b8a6", "#10b981", "#059669"],
+  sunset:  ["#f97316", "#ef4444", "#ec4899", "#a855f7", "#6366f1"],
+  forest:  ["#22c55e", "#16a34a", "#15803d", "#166534", "#14532d"],
+  slate:   ["#64748b", "#475569", "#334155", "#1e293b", "#0f172a"],
+  berry:   ["#c026d3", "#a21caf", "#7c3aed", "#6d28d9", "#4f46e5"],
+};
+let activePalette = "ocean";
+
+// ─── Tooltip ─────────────────────────────────────────────────
+const tooltip = document.getElementById("tooltip");
+function showTooltip(evt, html) {
+  tooltip.innerHTML = html;
+  tooltip.classList.add("visible");
+  const x = evt.clientX + 12;
+  const y = evt.clientY - 8;
+  tooltip.style.left = x + "px";
+  tooltip.style.top = y + "px";
+}
+function hideTooltip() { tooltip.classList.remove("visible"); }
+
+// ─── Core Renderer ───────────────────────────────────────────
+function renderInlineSankey(container, data, opts = {}) {
+  const {
+    width = 140,
+    height = 20,
+    nodeWidth = 4,
+    nodePadding = 3,
+    linkOpacity = 0.35,
+    palette = PALETTES[activePalette],
+  } = opts;
+
+  // Clear previous
+  const el = typeof container === "string" ? document.getElementById(container) : container;
+  el.innerHTML = "";
+
+  // Deep-copy data (d3-sankey mutates)
+  const graph = {
+    nodes: data.nodes.map(d => ({ ...d })),
+    links: data.links.map(d => ({ ...d })),
+  };
+
+  // Layout
+  const sankeyLayout = d3.sankey()
+    .nodeId(d => d.id)
+    .nodeWidth(nodeWidth)
+    .nodePadding(nodePadding)
+    .nodeSort(null)
+    .extent([[1, 1], [width - 1, height - 1]]);
+
+  sankeyLayout(graph);
+
+  // Color scale
+  const color = d3.scaleOrdinal().domain(graph.nodes.map(d => d.id)).range(palette);
+
+  // SVG
+  const svg = d3.select(el)
+    .append("svg")
+    .attr("width", width)
+    .attr("height", height)
+    .style("display", "inline-block")
+    .style("vertical-align", "middle")
+    .style("overflow", "visible");
+
+  // Links
+  svg.append("g")
+    .attr("fill", "none")
+    .selectAll("path")
+    .data(graph.links)
+    .join("path")
+    .attr("d", d3.sankeyLinkHorizontal())
+    .attr("stroke", d => color(d.source.id))
+    .attr("stroke-width", d => Math.max(0.5, d.width))
+    .attr("stroke-opacity", linkOpacity)
+    .on("mouseenter", (evt, d) => {
+      d3.select(evt.target).attr("stroke-opacity", Math.min(linkOpacity + 0.3, 0.8));
+      showTooltip(evt, `<strong>${d.source.name || d.source.id}</strong> → <strong>${d.target.name || d.target.id}</strong><br>${d.value.toLocaleString()}`);
+    })
+    .on("mousemove", (evt) => {
+      tooltip.style.left = (evt.clientX + 12) + "px";
+      tooltip.style.top = (evt.clientY - 8) + "px";
+    })
+    .on("mouseleave", (evt) => {
+      d3.select(evt.target).attr("stroke-opacity", linkOpacity);
+      hideTooltip();
+    });
+
+  // Nodes
+  svg.append("g")
+    .selectAll("rect")
+    .data(graph.nodes)
+    .join("rect")
+    .attr("x", d => d.x0)
+    .attr("y", d => d.y0)
+    .attr("width", d => d.x1 - d.x0)
+    .attr("height", d => Math.max(1, d.y1 - d.y0))
+    .attr("fill", d => color(d.id))
+    .attr("rx", 1)
+    .on("mouseenter", (evt, d) => {
+      showTooltip(evt, `<strong>${d.name || d.id}</strong><br>${d.value.toLocaleString()}`);
+    })
+    .on("mousemove", (evt) => {
+      tooltip.style.left = (evt.clientX + 12) + "px";
+      tooltip.style.top = (evt.clientY - 8) + "px";
+    })
+    .on("mouseleave", hideTooltip);
+
+  return svg;
+}
+
+// ─── Demo Datasets ──────────────────────────────────────────
+const DATA = {
+  revenue: {
+    nodes: [
+      { id: "direct", name: "Direct" },
+      { id: "partner", name: "Partnerships" },
+      { id: "organic", name: "Organic" },
+      { id: "enterprise", name: "Enterprise" },
+      { id: "smb", name: "SMB" },
+      { id: "self-serve", name: "Self-Serve" },
+    ],
+    links: [
+      { source: "direct", target: "enterprise", value: 420 },
+      { source: "direct", target: "smb", value: 280 },
+      { source: "partner", target: "enterprise", value: 190 },
+      { source: "partner", target: "smb", value: 130 },
+      { source: "organic", target: "smb", value: 210 },
+      { source: "organic", target: "self-serve", value: 350 },
+    ],
+  },
+  funnel: {
+    nodes: [
+      { id: "visit", name: "Visitors" },
+      { id: "signup", name: "Signups" },
+      { id: "activate", name: "Activated" },
+      { id: "retain", name: "Retained" },
+      { id: "churn", name: "Churned" },
+    ],
+    links: [
+      { source: "visit", target: "signup", value: 3200 },
+      { source: "visit", target: "churn", value: 6800 },
+      { source: "signup", target: "activate", value: 2400 },
+      { source: "signup", target: "churn", value: 800 },
+      { source: "activate", target: "retain", value: 1900 },
+      { source: "activate", target: "churn", value: 500 },
+    ],
+  },
+  tickets: {
+    nodes: [
+      { id: "billing", name: "Billing" },
+      { id: "product", name: "Product Bug" },
+      { id: "feature", name: "Feature Req" },
+      { id: "resolved", name: "Resolved" },
+      { id: "escalated", name: "Escalated" },
+      { id: "backlog", name: "Backlogged" },
+    ],
+    links: [
+      { source: "billing", target: "resolved", value: 180 },
+      { source: "billing", target: "escalated", value: 150 },
+      { source: "product", target: "resolved", value: 220 },
+      { source: "product", target: "escalated", value: 47 },
+      { source: "feature", target: "backlog", value: 200 },
+      { source: "feature", target: "resolved", value: 50 },
+    ],
+  },
+  content: {
+    nodes: [
+      { id: "draft", name: "Drafts" },
+      { id: "review", name: "In Review" },
+      { id: "approved", name: "Approved" },
+      { id: "published", name: "Published" },
+      { id: "revision", name: "Needs Revision" },
+    ],
+    links: [
+      { source: "draft", target: "review", value: 45 },
+      { source: "review", target: "approved", value: 27 },
+      { source: "review", target: "revision", value: 18 },
+      { source: "approved", target: "published", value: 25 },
+      { source: "revision", target: "review", value: 12 },
+    ],
+  },
+  compare: {
+    nodes: [
+      { id: "new", name: "New Users" },
+      { id: "return", name: "Returning" },
+      { id: "convert", name: "Converted" },
+      { id: "bounce", name: "Bounced" },
+    ],
+    links: [
+      { source: "new", target: "convert", value: 380 },
+      { source: "new", target: "bounce", value: 620 },
+      { source: "return", target: "convert", value: 710 },
+      { source: "return", target: "bounce", value: 290 },
+    ],
+  },
+};
+
+// ─── Render All Static Sankeys ──────────────────────────────
+function renderAll() {
+  renderInlineSankey("sankey-revenue", DATA.revenue, { width: 150, height: 20 });
+  renderInlineSankey("sankey-funnel", DATA.funnel, { width: 160, height: 22 });
+  renderInlineSankey("sankey-tickets", DATA.tickets, { width: 150, height: 20 });
+  renderInlineSankey("sankey-content", DATA.content, { width: 140, height: 20 });
+  renderInlineSankey("sankey-compare", DATA.compare, { width: 120, height: 28 });
+}
+renderAll();
+
+// ─── Sparkline for Comparison ───────────────────────────────
+(function drawSparkline() {
+  const data = [42, 48, 55, 53, 62, 58, 65, 71, 68, 74, 78, 62];
+  const svg = d3.select("#sparkline-compare");
+  const w = 120, h = 32, pad = 4;
+  const x = d3.scaleLinear().domain([0, data.length - 1]).range([pad, w - pad]);
+  const y = d3.scaleLinear().domain([d3.min(data) - 5, d3.max(data) + 5]).range([h - pad, pad]);
+  const line = d3.line().x((_, i) => x(i)).y(d => y(d)).curve(d3.curveCatmullRom);
+  svg.append("path").attr("d", line(data)).attr("fill", "none").attr("stroke", "#0ea5e9").attr("stroke-width", 1.5);
+  svg.append("circle").attr("cx", x(data.length - 1)).attr("cy", y(data[data.length - 1])).attr("r", 2.5).attr("fill", "#0ea5e9");
+})();
+
+// ─── Sandbox Controls ───────────────────────────────────────
+const controls = {
+  width: document.getElementById("ctrl-width"),
+  height: document.getElementById("ctrl-height"),
+  nodewidth: document.getElementById("ctrl-nodewidth"),
+  padding: document.getElementById("ctrl-padding"),
+  opacity: document.getElementById("ctrl-opacity"),
+};
+
+function updateSandbox() {
+  const w = +controls.width.value;
+  const h = +controls.height.value;
+  const nw = +controls.nodewidth.value;
+  const np = +controls.padding.value;
+  const op = +controls.opacity.value / 100;
+
+  document.getElementById("val-width").textContent = w + "px";
+  document.getElementById("val-height").textContent = h + "px";
+  document.getElementById("val-nodewidth").textContent = nw + "px";
+  document.getElementById("val-padding").textContent = np + "px";
+  document.getElementById("val-opacity").textContent = op.toFixed(2);
+
+  renderInlineSankey("sankey-sandbox", DATA.revenue, {
+    width: w, height: h, nodeWidth: nw, nodePadding: np, linkOpacity: op,
+    palette: PALETTES[activePalette],
+  });
+}
+
+Object.values(controls).forEach(c => c.addEventListener("input", updateSandbox));
+
+// Palette picker
+const pickerEl = document.getElementById("palette-picker");
+Object.entries(PALETTES).forEach(([name, colors]) => {
+  const opt = document.createElement("div");
+  opt.className = "palette-option" + (name === activePalette ? " active" : "");
+  opt.title = name;
+  colors.slice(0, 3).forEach(c => {
+    const swatch = document.createElement("div");
+    swatch.className = "palette-swatch";
+    swatch.style.background = c;
+    opt.appendChild(swatch);
+  });
+  opt.addEventListener("click", () => {
+    activePalette = name;
+    document.querySelectorAll(".palette-option").forEach(el => el.classList.remove("active"));
+    opt.classList.add("active");
+    renderAll();
+    updateSandbox();
+  });
+  pickerEl.appendChild(opt);
+});
+
+// Initial sandbox render
+updateSandbox();
+</script>
+
+</body>
+</html>
